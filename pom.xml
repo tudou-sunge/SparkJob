@@ -1,0 +1,274 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>org.ssx</groupId>
+    <artifactId>SparkJob</artifactId>
+    <version>1.0</version>
+    <properties>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+        <scala.version>2.11.12</scala.version>
+        <encoding>UTF-8</encoding>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <java.version>1.8</java.version>
+        <hadoop.version>3.0.0</hadoop.version>
+        <hive.version>2.1.1</hive.version>
+        <phoenix-core.version>5.0.0-HBase-2.0</phoenix-core.version>
+        <spark.version>2.4.0</spark.version>
+        <okhttp.version>2.7.5</okhttp.version>
+    </properties>
+
+    <!-- 项目变量三套环境 -->
+    <profiles>
+        <!--开发环境 -->
+        <profile>
+            <id>dev</id>
+            <properties>
+                <profiles.active>dev</profiles.active>
+            </properties>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+        </profile>
+        <!--测试环境 -->
+        <profile>
+            <id>test</id>
+            <properties>
+                <profiles.active>test</profiles.active>
+            </properties>
+        </profile>
+        <!--生产环境 -->
+        <profile>
+            <id>pro</id>
+            <properties>
+                <profiles.active>pro</profiles.active>
+            </properties>
+        </profile>
+    </profiles>
+
+    <dependencies>
+        <!--        引入这个包才能查看源码-->
+        <dependency>
+            <groupId>org.scala-lang</groupId>
+            <artifactId>scala-library</artifactId>
+            <version>2.11.12</version>
+        </dependency>
+        <dependency>
+            <groupId>org.mongodb.spark</groupId>
+            <artifactId>mongo-spark-connector_2.11</artifactId>
+            <version>2.4.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-hive_2.11</artifactId>
+            <version>${spark.version}</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/org.apache.spark/spark-sql -->
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-sql_2.11</artifactId>
+            <version>${spark.version}</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/org.apache.spark/spark-streaming -->
+
+        <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <version>5.1.46</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/joda-time/joda-time -->
+        <dependency>
+            <groupId>joda-time</groupId>
+            <artifactId>joda-time</artifactId>
+            <version>2.9.9</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/com.alibaba/fastjson -->
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>fastjson</artifactId>
+            <version>1.2.47</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/com.alibaba/druid -->
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>druid</artifactId>
+            <version>1.1.9</version>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <finalName>spark-job</finalName>
+        <sourceDirectory>src/main/scala</sourceDirectory>
+        <resources>
+            <!-- 排除目录 -->
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>false</filtering>
+                <excludes>
+                    <exclude>conf/dev/**</exclude>
+                    <exclude>conf/test/**</exclude>
+                    <exclude>conf/pro/**</exclude>
+                </excludes>
+            </resource>
+            <!-- 定制开发环境配置文件替换到指定conf目录 -->
+            <resource>
+                <directory>src/main/resources/conf/${profiles.active}</directory>
+                <targetPath>conf</targetPath>
+                <includes>
+                    <include>*.properties</include>
+                </includes>
+                <filtering>true</filtering>
+            </resource>
+            <!-- 定制开发环境配置文件替换到src/main/resources目录 -->
+            <resource>
+                <directory>src/main/resources/conf/${profiles.active}</directory>
+                <includes>
+                    <include>core-site.xml</include>
+                    <include>hdfs-site.xml</include>
+                    <include>hive-site.xml</include>
+                </includes>
+                <filtering>true</filtering>
+            </resource>
+        </resources>
+
+        <plugins>
+            <!-- 在maven项目中既有java又有scala代码时配置 maven-scala-plugin 插件打包时可以将两类代码一起打包 -->
+            <plugin>
+                <groupId>org.scala-tools</groupId>
+                <artifactId>maven-scala-plugin</artifactId>
+                <version>2.15.2</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>compile</goal>
+                            <goal>testCompile</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- maven 打jar包需要插件 -->
+            <!--            <plugin>-->
+            <!--                <artifactId>maven-assembly-plugin</artifactId>-->
+            <!--                <version>2.4</version>-->
+            <!--                <configuration>-->
+            <!--                    &lt;!&ndash; 设置false后是去掉 MySpark-1.0-SNAPSHOT-jar-with-dependencies.jar 后的 “-jar-with-dependencies” &ndash;&gt;-->
+            <!--                    &lt;!&ndash;<appendAssemblyId>false</appendAssemblyId>&ndash;&gt;-->
+            <!--                    <descriptorRefs>-->
+            <!--                        <descriptorRef>jar-with-dependencies</descriptorRef>-->
+            <!--                    </descriptorRefs>-->
+            <!--                    <archive>-->
+            <!--                        <manifest>-->
+            <!--                            <mainClass>com.dongao.spark.SparkEntry</mainClass>-->
+            <!--                        </manifest>-->
+            <!--                    </archive>-->
+            <!--                </configuration>-->
+            <!--                <executions>-->
+            <!--                    <execution>-->
+            <!--                        <id>make-assembly</id>-->
+            <!--                        <phase>package</phase>-->
+            <!--                        <goals>-->
+            <!--                            <goal>assembly</goal>-->
+            <!--                        </goals>-->
+            <!--                    </execution>-->
+            <!--                </executions>-->
+            <!--            </plugin>-->
+
+            <!-- 以上assembly可以将依赖的包打入到一个jar包中，下面这种方式是使用maven原生的方式打jar包，不将依赖的包打入到最终的jar包中 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>2.4</version>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <addClasspath>true</addClasspath>
+                            <!-- 指定当前主类运行时找依赖的jar包时 所有依赖的jar包存放路径的前缀 -->
+                            <!--                <classpathPrefix>/alljars/lib</classpathPrefix>-->
+                            <mainClass>com.ssx.spark.SparkEntry</mainClass>
+                        </manifest>
+                    </archive>
+                </configuration>
+            </plugin>
+
+
+            <!-- 拷贝依赖的jar包到lib目录 -->
+            <!--<plugin>-->
+            <!--<groupId>org.apache.maven.plugins</groupId>-->
+            <!--<artifactId>maven-dependency-plugin</artifactId>-->
+            <!--<executions>-->
+            <!--<execution>-->
+            <!--<id>copy</id>-->
+            <!--<phase>package</phase>-->
+            <!--<goals>-->
+            <!--<goal>copy-dependencies</goal>-->
+            <!--</goals>-->
+            <!--<configuration>-->
+            <!--<outputDirectory>-->
+            <!--&lt;!&ndash; 将依赖的jar 包复制到target/lib下&ndash;&gt;-->
+            <!--${project.build.directory}/lib-->
+            <!--</outputDirectory>-->
+            <!--</configuration>-->
+            <!--</execution>-->
+            <!--</executions>-->
+            <!--</plugin>-->
+
+            <!-- 该插件解决java和scala混编时出错的问题 -->
+            <plugin>
+                <groupId>net.alchim31.maven</groupId>
+                <artifactId>scala-maven-plugin</artifactId>
+                <version>3.3.1</version>
+                <executions>
+                    <execution>
+                        <id>scala-compile-first</id>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>add-source</goal>
+                            <goal>compile</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <phase>compile</phase>
+                        <goals>
+                            <goal>compile</goal>
+                            <goal>testCompile</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <scalaVersion>${scala.version}</scalaVersion>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <repositories>
+        <repository>
+            <id>public</id>
+            <name>aliyun nexus</name>
+            <url>http://maven.aliyun.com/nexus/content/groups/public/</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+        </repository>
+    </repositories>
+
+    <pluginRepositories>
+        <pluginRepository>
+            <id>public</id>
+            <name>aliyun nexus</name>
+            <url>http://maven.aliyun.com/nexus/content/groups/public/</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </pluginRepository>
+    </pluginRepositories>
+
+</project>
