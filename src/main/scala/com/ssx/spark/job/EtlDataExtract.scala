@@ -1,6 +1,5 @@
 package com.ssx.spark.job
 
-import java.util.function.Consumer
 
 import com.ssx.spark.utils.ParseJobParam
 import com.ssx.spark.AbstractApplication
@@ -18,9 +17,9 @@ import scala.collection.mutable
  * 调用示例：
  * spark-submit --class com.ssx.spark.SparkEntry --master yarn --deploy-mode cluster /home/sunshuxian/jar/spark-job.jar "className=com.ssx.spark.job.EtlDataExtract,runDay=2021-01-01,seq=1,jobId=55"
  *
- * @author sunshuxian@dongao.com
- * @version 1.0    只支持天分区
- * @create 2020/06/27 10:53
+ * @author sunshuxian
+ * @version 1.0
+ * @create 2021/05/10 10:53
  **/
 
 class EtlDataExtract extends AbstractApplication {
