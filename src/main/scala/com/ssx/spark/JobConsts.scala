@@ -17,6 +17,11 @@ object JobConsts {
    * 调用方传入的任务序号
    */
   val SEQ = "seq"
+  /**
+   * 调用方传入的任务ID
+   */
+  val JOB_ID = "jobId"
+
 
 
 }

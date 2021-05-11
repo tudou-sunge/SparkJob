@@ -1,10 +1,12 @@
 package com.ssx.spark
 
 import java.sql.{Connection, Timestamp}
+import java.util.Properties
 
 import com.ssx.spark.common.Source
 import com.ssx.spark.common.DataExtract
 import com.ssx.spark.utils.MySqlProperty
+import org.apache.phoenix.jdbc.PhoenixDriver
 import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
@@ -147,6 +149,19 @@ trait AbstractApplication extends Logging with Serializable {
       }
 
     result(0)
+  }
+
+  /**
+   * 获取Phoenix链接
+   */
+
+  def getPhoenixConnect(): Connection={
+    val driver = new PhoenixDriver()
+    val properties=new Properties()
+    val connect=driver.connect("jdbc:phoenix:hdn1.dabig.com:2181",properties)
+    connect.setAutoCommit(false)
+    connect.setReadOnly(false)
+    connect
   }
 
 }

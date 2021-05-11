@@ -2,7 +2,7 @@ package com.ssx.spark.job
 
 
 import com.ssx.spark.utils.ParseJobParam
-import com.ssx.spark.AbstractApplication
+import com.ssx.spark.{AbstractApplication, JobConsts}
 import com.alibaba.fastjson.{JSON, JSONArray, JSONObject}
 import com.ssx.spark.common.{DataExtract, Source}
 import org.apache.spark.SparkConf
@@ -28,9 +28,10 @@ class EtlDataExtract extends AbstractApplication {
   }
 
   override def execute(sparkSession: SparkSession, args: mutable.Map[String, String]): Unit = {
-    val runDay = args("runDay")
-    val seq = args("seq").toInt
-    val jobId = args("jobId").toLong
+    val runDay = args(JobConsts.RUN_DAY)
+    val seq = args(JobConsts.SEQ).toInt
+    val jobId = args(JobConsts.JOB_ID).toLong
+    logInfo(s"JobId: $jobId  runDay:$runDay  seq:$seq  Job Begin Running!!!!")
     // val job = getJob(sparkSession, jobId)
     val (job, source) = createTestData()
     val jobParam = ParseJobParam.parseJobParam(job.jobParam, runDay, seq)
@@ -51,6 +52,7 @@ class EtlDataExtract extends AbstractApplication {
       delPartition(sparkSession, targetTable, partitionBy, jobParam, targetDb)
     }
 
+    // 逐个便利要抽取的表写入HIVE中
     sourceTable.toArray().map(_.toString).foreach(t => {
       val tmpDF = getDataFrame(sparkSession, source, t, splitKey, filterStr)
       transformDataFrame(tmpDF, sparkSession, fieldMapping, partitionBy, jobParam)
@@ -59,26 +61,30 @@ class EtlDataExtract extends AbstractApplication {
     })
 
 
+
   }
 
-
+  /**
+   * 对DF进行转译
+   */
   def transformDataFrame(df: DataFrame, sparkSession: SparkSession, fieldMapping: JSONArray, partitionBy: JSONArray, jobParam: mutable.HashMap[String, String]) = {
     var tmpDf = df
     // 要查询的字段
     var columnSeq = Seq.empty[String]
+    // 分区字段
     var partitionSeq = Seq.empty[String]
-    // 修改字段别名
+    // 修改字段映射名称
     fieldMapping.toArray.map(_.asInstanceOf[JSONObject]).foreach(t => {
-      val source = t.getObject("sourceName", classOf[String])
-      val target = t.getObject("targetName", classOf[String])
+      val source = t.getObject(FieldMapping.SOURCE_NAME, classOf[String])
+      val target = t.getObject(FieldMapping.TARGET_NAME, classOf[String])
       columnSeq = columnSeq :+ target
       tmpDf = tmpDf.withColumnRenamed(source, target)
     })
 
-    // colNames: Seq[String], cols: Seq[Column]
+    // 增加分区字段及值
     partitionBy.toArray.map(_.asInstanceOf[JSONObject]).foreach(t => {
-      val partition = t.getObject("partition", classOf[String])
-      val value = t.getObject("value", classOf[String])
+      val partition = t.getObject(PartitionBy.PARTITION, classOf[String])
+      val value = t.getObject(PartitionBy.VALUE, classOf[String])
       columnSeq = columnSeq :+ partition
       partitionSeq = partitionSeq :+ partition
       tmpDf = tmpDf.withColumn(partition, functions.lit(ParseJobParam.replaceJobParam(jobParam, value)))
@@ -144,8 +150,8 @@ class EtlDataExtract extends AbstractApplication {
     var partitionSeq = Seq.empty[Map[String, String]]
     // 确认需要删除的分区
     partitionBy.toArray().map(_.asInstanceOf[JSONObject]).foreach(item => {
-      val partitionStr = item.getObject("partition", classOf[String])
-      val value = item.getObject("value", classOf[String])
+      val partitionStr = item.getObject(PartitionBy.PARTITION, classOf[String])
+      val value = item.getObject(PartitionBy.VALUE, classOf[String])
       partitionSeq = partitionSeq :+ Map(partitionStr -> jobParam.get(value).getOrElse(value))
     })
     // 确认需要删除库表

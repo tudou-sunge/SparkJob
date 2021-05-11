@@ -97,6 +97,22 @@
             <artifactId>druid</artifactId>
             <version>1.1.9</version>
         </dependency>
+        <dependency>
+            <groupId>org.apache.phoenix</groupId>
+            <artifactId>phoenix-spark</artifactId>
+            <version>${phoenix-core.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.glassfish</groupId>
+                    <artifactId>javax.el</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-streaming-kafka-0-10_2.11</artifactId>
+            <version>${spark.version}</version>
+        </dependency>
 
     </dependencies>
 
