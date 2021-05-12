@@ -8,9 +8,10 @@ import org.bson.types.ObjectId
 
 
 /**
+ * 自定义分片规则
  * @description
  * @author sunshuxian
- * @createTime 2021/4/6 6:32 下午
+ * @createTime 2021/5/11 6:32 下午
  * @version 1.0
  */
 class MongoPartitionUserDefined extends MongoPaginateByCountPartitioner {
@@ -20,7 +21,8 @@ class MongoPartitionUserDefined extends MongoPaginateByCountPartitioner {
 
   override def partitions(connector: MongoConnector, readConfig: ReadConfig, pipeline: Array[BsonDocument]): Array[MongoPartition] = {
     val boundaryQuery = PartitionerHelper.createBoundaryQuery("_id", new BsonObjectId(new ObjectId("5fedf5800000000000000000")), new BsonObjectId(new ObjectId("5fee03900000000000000000")))
-    val mongoPartition = new MongoPartition(0, boundaryQuery, PartitionerHelper.locations(connector))
+    val mongoPartition = MongoPartition(0, boundaryQuery, PartitionerHelper.locations(connector))
+    // TODO
     Array[MongoPartition](mongoPartition)
   }
 }

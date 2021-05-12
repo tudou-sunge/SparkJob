@@ -3,13 +3,18 @@ package com.ssx.spark
 import java.sql.{Connection, Timestamp}
 import java.util.Properties
 
+import com.alibaba.fastjson.{JSONArray, JSONObject}
 import com.ssx.spark.common.Source
 import com.ssx.spark.common.DataExtract
+import com.ssx.spark.job.PartitionBy
 import com.ssx.spark.utils.MySqlProperty
 import org.apache.phoenix.jdbc.PhoenixDriver
 import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.catalog.SessionCatalog
+import org.apache.spark.sql.types.{DataType, IntegerType, LongType, StringType, TimestampType}
+import org.apache.spark.sql.{DataFrame, DataFrameWriter, Dataset, Row, SaveMode, SparkSession}
 
 import scala.collection.{immutable, mutable}
 
@@ -75,7 +80,7 @@ trait AbstractApplication extends Logging with Serializable {
   /**
    * 获取数据源
    */
-  def getSource(sparkSession: SparkSession, sourceType: String, sourceId: Long) = {
+  protected def getSource(sparkSession: SparkSession, sourceType: String, sourceId: Long) = {
     val result = sparkSession.read
       .format("jdbc")
       .option("url", MySqlProperty.URL)
@@ -112,7 +117,7 @@ trait AbstractApplication extends Logging with Serializable {
   /**
    * 获取任务
    */
-  def getJob(sparkSession: SparkSession, jobId: Long) = {
+  protected def getJob(sparkSession: SparkSession, jobId: Long) = {
     val result = sparkSession.read
       .format("jdbc")
       .option("url", MySqlProperty.URL)
@@ -155,13 +160,144 @@ trait AbstractApplication extends Logging with Serializable {
    * 获取Phoenix链接
    */
 
-  def getPhoenixConnect(): Connection={
+  protected def getPhoenixConnect(url: String): Connection={
     val driver = new PhoenixDriver()
-    val properties=new Properties()
-    val connect=driver.connect("jdbc:phoenix:hdn1.dabig.com:2181",properties)
+    val properties = new Properties()
+    val connect = driver.connect(url ,properties)
     connect.setAutoCommit(false)
     connect.setReadOnly(false)
     connect
+  }
+
+  /**
+   * 单Executor读取
+   */
+  protected def getDataFrame(sparkSession: SparkSession, source: Source, tableName: String): DataFrame = {
+    sparkSession.read
+      .format("jdbc")
+      .option("url", source.url + "/" + source.dbName)
+      .option("driver", source.driver)
+      .option("user", source.userName)
+      .option("password", source.password)
+      .option("dbtable", tableName)
+      .load
+  }
+
+  /**
+   * 分片读取
+   */
+  protected def getDataFrame[T <: DataType](sparkSession: SparkSession, source: Source, tableName: String, splitKey: String, filter: String, dataType: Class[T]): DataFrame = {
+    var lowerBound = ""
+    var upperBound = ""
+    var numPartitions = 0L
+    if (dataType == classOf[LongType] || dataType == classOf[IntegerType]) {
+      getDataFrame(sparkSession, source, tableName)
+        .where(if (filter.trim.isEmpty) "1=1" else filter)
+        .agg(splitKey -> "min", splitKey -> "max")
+        .collect()
+        .foreach(x => {
+          lowerBound = x.get(0).toString
+          upperBound = x.get(1).toString
+          numPartitions = (x.get(1).toString.toLong - x.get(0).toString.toLong) / 300000L + 1
+        })
+    }
+    if (dataType == classOf[TimestampType]) {
+      getDataFrame(sparkSession, source, tableName)
+        .where(if (filter.trim.isEmpty) "1=1" else filter)
+        .agg(splitKey -> "min", splitKey -> "max")
+        .collect()
+        .foreach(x => {
+          lowerBound = x.getTimestamp(0).toString.substring(0,19)
+          upperBound = x.getTimestamp(1).toString.substring(0,19)
+        })
+      numPartitions = 32L
+    }
+    if (lowerBound == "" || upperBound == "") throw new Exception("source table is Empty")
+    sparkSession.read
+      .format("jdbc")
+      .option("url", source.url + "/" + source.dbName)
+      .option("driver", source.driver)
+      .option("user", source.userName)
+      .option("password", source.password)
+      .option("dbtable", tableName)
+      .option("partitionColumn", splitKey)
+      .option("lowerBound", lowerBound)
+      .option("upperBound", upperBound)
+      .option("numPartitions", numPartitions)
+      .option("fetchsize", 1000)
+      .load
+      .where(if (filter.trim.isEmpty) "1=1" else filter)
+  }
+
+  /**
+   * 删除分区
+   */
+  protected def delPartition(sparkSession: SparkSession, tableName: String, partitionBy: JSONArray, jobParam: mutable.HashMap[String, String], dbName: String = "default"): Unit = {
+    val sessionCatalog: SessionCatalog = sparkSession.sessionState.catalog
+    var partitionSeq = Seq.empty[Map[String, String]]
+    // 确认需要删除的分区
+    partitionBy.toArray().map(_.asInstanceOf[JSONObject]).foreach(item => {
+      val partitionStr = item.getObject(PartitionBy.PARTITION, classOf[String])
+      val value = item.getObject(PartitionBy.VALUE, classOf[String])
+      partitionSeq = partitionSeq :+ Map(partitionStr -> jobParam.get(value).getOrElse(value))
+    })
+    // 确认需要删除库表
+    if (tableName.contains(".")) {
+      val db = tableName.substring(0, tableName.indexOf("."))
+      val table = tableName.substring(tableName.indexOf(".") + 1, tableName.length) //不存在时是否忽略                     //是否保留数据
+      sessionCatalog.dropPartitions(new TableIdentifier(table, Option(db)), partitionSeq, true, true, false)
+    } else {
+      sessionCatalog.dropPartitions(new TableIdentifier(tableName, Option(dbName)), partitionSeq, true, true, false)
+    }
+  }
+
+  /**
+   * 返回splitKey类型
+   */
+  protected def getSplitKeyType(sparkSession: SparkSession, splitKey: String, source: Source, tableName: String) = {
+    val structType = getDataFrame(sparkSession, source, tableName).select(splitKey).limit(1).schema
+    val structFieldArray = structType.fields
+    val structField = structFieldArray(0)
+    val dataType: DataType = structField.dataType
+    dataType match {
+      case LongType => classOf[LongType]
+      case IntegerType => classOf[IntegerType]
+      case TimestampType => classOf[TimestampType]
+      case _ => throw new Exception("Partition column type should be numeric, date, or timestamp")
+    }
+  }
+
+  /**
+   * 保存数据到ClickHouse，注意Overwrite模式，我们不删除表，只是清除数据，因为删除表存在权限问题
+   */
+  protected def save2Clickhouse(df: Dataset[Row], dbName: String, tableName: String, mode: SaveMode): Unit = {
+    var tmpMode = SaveMode.Append
+    if (null != mode) {
+      tmpMode = mode
+    }
+    val dfWrite = df
+      .write
+      .format("jdbc")
+      .mode(mode)
+      .option("driver", "cc.blynk.clickhouse.ClickHouseDriver")
+      .option("url", "jdbc:clickhouse://xxxxx:7001/test?rewriteBatchedStatements=true")
+      .option("dbtable", tableName)
+      .option("user", "")
+      .option("password", "")
+      .option("numPartitions", 4)
+      .option("batchsize", 100000) //default 1000
+    // 写mysql优化：配置numPartitions、batchsize，最关键的是url中配置rewriteBatchedStatements=true，即打开mysql的批处理能力
+    log.info(dbName + "." + tableName + " 写入模式：" + mode)
+    // 重写模式下，采用清空表的方式 ，注意，必须有drop的权限才可以，否则会一直报错没权限
+    if (tmpMode eq SaveMode.Overwrite) dfWrite.option("truncate", true).save()
+    else dfWrite.save()
+  }
+
+  /**
+   * 对DF进行转译
+   */
+  def transformDataFrame(df: DataFrame, sparkSession: SparkSession, fieldMapping: JSONArray, partitionBy: JSONArray, jobParam: mutable.HashMap[String, String]):DataFrameWriter[Row]= {
+    null
   }
 
 }

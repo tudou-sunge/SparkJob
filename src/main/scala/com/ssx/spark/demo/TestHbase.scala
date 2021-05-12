@@ -1,9 +1,10 @@
 package com.ssx.spark.demo
 
+import com.alibaba.fastjson.JSONArray
 import com.ssx.spark.AbstractApplication
 import org.apache.phoenix.spark.{DataFrameFunctions, PhoenixRDD}
 import org.apache.spark.SparkConf
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{DataFrame, DataFrameWriter, Row, SparkSession}
 
 import scala.collection.mutable
 
@@ -48,7 +49,7 @@ class TestHbase extends AbstractApplication {
     b.show(10)
 
     //方式3：
-    val connect = getPhoenixConnect()
+    val connect = getPhoenixConnect("jdbc:phoenix:hdn1.dabig.com:2181")
     val stmt = connect.createStatement()
     //查询
     val c = stmt.executeQuery("select * from test.example limit 100")
@@ -81,4 +82,5 @@ class TestHbase extends AbstractApplication {
 
 
   }
+
 }
