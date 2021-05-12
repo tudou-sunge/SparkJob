@@ -32,8 +32,7 @@ class EtlDataExtract extends AbstractApplication {
     val seq = args(JobConsts.SEQ).toInt
     val jobId = args(JobConsts.JOB_ID).toLong
     logInfo(s"JobId: $jobId  runDay:$runDay  seq:$seq  Job Begin Running!!!!")
-    // val job = getJob(sparkSession, jobId)
-    val (job, source) = createTestData()
+    val job = getJob(sparkSession, jobId)
     val jobParam = ParseJobParam.parseJobParam(job.jobParam, runDay, seq)
     val jobContent = JSON.parseObject(job.jobContent)
     val sourceType = jobContent.getObject("sourceType", classOf[String])
@@ -45,7 +44,7 @@ class EtlDataExtract extends AbstractApplication {
     val splitKey = jobContent.getObject("splitKey", classOf[String])
     val fieldMapping = jobContent.getJSONArray("fieldMapping")
     val partitionBy = jobContent.getJSONArray("partitionBy")
-    // val source = getSource(sparkSession, sourceType, sourceId)
+    val source = getSource(sparkSession, sourceType, sourceId)
     val sourceTable = jobContent.getJSONArray("sourceTable")
     // 如果是覆盖则先删除分区内容
     if (jobContent.getObject("writeMode", classOf[String]) == "1") {
@@ -54,12 +53,12 @@ class EtlDataExtract extends AbstractApplication {
 
     // 逐个便利要抽取的表写入HIVE中
     sourceTable.toArray().map(_.toString).foreach(t => {
-      val tmpDF = getDataFrame(sparkSession, source, t, splitKey, filterStr)
+      val splitKeyType = getSplitKeyType(sparkSession, splitKey, source, t)
+      val tmpDF = getDataFrame(sparkSession, source, t, splitKey, filterStr, splitKeyType)
       transformDataFrame(tmpDF, sparkSession, fieldMapping, partitionBy, jobParam)
         .mode(SaveMode.Append)
         .saveAsTable(targetDb + "." + targetTable)
     })
-
 
 
   }
@@ -67,7 +66,7 @@ class EtlDataExtract extends AbstractApplication {
   /**
    * 对DF进行转译
    */
-  def transformDataFrame(df: DataFrame, sparkSession: SparkSession, fieldMapping: JSONArray, partitionBy: JSONArray, jobParam: mutable.HashMap[String, String]) = {
+  override def transformDataFrame(df: DataFrame, sparkSession: SparkSession, fieldMapping: JSONArray, partitionBy: JSONArray, jobParam: mutable.HashMap[String, String]) = {
     var tmpDf = df
     // 要查询的字段
     var columnSeq = Seq.empty[String]
@@ -96,76 +95,26 @@ class EtlDataExtract extends AbstractApplication {
       .format("hive")
   }
 
-  /**
-   * 单Executor读取
-   */
-  private def getDataFrame(sparkSession: SparkSession, source: Source, tableName: String): DataFrame = {
-    sparkSession.read
-      .format("jdbc")
-      .option("url", source.url + "/" + source.dbName)
-      .option("driver", source.driver)
-      .option("user", source.userName)
-      .option("password", source.password)
-      .option("dbtable", tableName)
-      .load
-  }
-
-  /**
-   * 分片读取
-   */
-  private def getDataFrame(sparkSession: SparkSession, source: Source, tableName: String, splitKey: String, filter: String): DataFrame = {
-    var lowerBound = 1L
-    var upperBound = 1L
-    this.getDataFrame(sparkSession, source, tableName)
-      .where(if (filter.trim.isEmpty) "1=1" else filter)
-      .agg(splitKey -> "min", splitKey -> "max")
-      .collect()
-      .foreach(x => {
-        lowerBound = x.get(0).toString.toLong
-        upperBound = x.get(1).toString.toLong + 1
-      })
-    val numPartitions = (upperBound - lowerBound) / 300000L + 1
-    sparkSession.read
-      .format("jdbc")
-      .option("url", source.url + "/" + source.dbName)
-      .option("driver", source.driver)
-      .option("user", source.userName)
-      .option("password", source.password)
-      .option("dbtable", tableName)
-      .option("partitionColumn", splitKey)
-      .option("lowerBound", lowerBound)
-      .option("upperBound", upperBound)
-      .option("numPartitions", numPartitions)
-      .option("fetchsize", 1000)
-      .load
-      .where(if (filter.trim.isEmpty) "1=1" else filter)
-
-  }
-
-  /**
-   * 删除分区
-   */
-  private def delPartition(sparkSession: SparkSession, tableName: String, partitionBy: JSONArray, jobParam: mutable.HashMap[String, String], dbName: String = "default"): Unit = {
-    val sessionCatalog: SessionCatalog = sparkSession.sessionState.catalog
-    var partitionSeq = Seq.empty[Map[String, String]]
-    // 确认需要删除的分区
-    partitionBy.toArray().map(_.asInstanceOf[JSONObject]).foreach(item => {
-      val partitionStr = item.getObject(PartitionBy.PARTITION, classOf[String])
-      val value = item.getObject(PartitionBy.VALUE, classOf[String])
-      partitionSeq = partitionSeq :+ Map(partitionStr -> jobParam.get(value).getOrElse(value))
-    })
-    // 确认需要删除库表
-    if (tableName.contains(".")) {
-      val db = tableName.substring(0, tableName.indexOf("."))
-      val table = tableName.substring(tableName.indexOf(".") + 1, tableName.length) //不存在时是否忽略                     //是否保留数据
-      sessionCatalog.dropPartitions(new TableIdentifier(table, Option(db)), partitionSeq, true, true, false)
-    } else {
-      sessionCatalog.dropPartitions(new TableIdentifier(tableName, Option(dbName)), partitionSeq, true, true, false)
-    }
-  }
-
   // 测试方法
   def createTestData() = {
+    //    val job = DataExtract()
+    //    job.jobId = 55
+    //    job.jobParam = "$yesterday={yyyyMMdd} $yesterdayiso={yyyy-MM-dd} $today=[yyyyMMdd] $todayiso=[yyyy-MM-dd]"
+    //    job.jobName = "ods_ceshi_chouqu1"
+    //    job.jobType = "DataExtract"
+    //    job.jobComment = "ods_ceshi_chouqu1"
+    //    job.jobCycle = "D"
+    //    job.jobExecuteTime = "00:05"
+    //    job.jobContent = "{\"sourceType\": \"MYSQL\",\"sourceId\": null,\"sourceTable\": [\"da_app_page\"],\"targetType\": \"HIVE\",\"targetDb\": \"test\",\"targetTable\": \"da_app_page\",\"filter\": \"\",\"splitKey\": \"id\",\"writeMode\": 1,\"fieldMapping\" : [{ \"sourceName\": \"id\", \"targetName\": \"id\" },{ \"sourceName\": \"page\", \"targetName\": \"page\" },{ \"sourceName\": \"page_name\", \"targetName\": \"page_name\" },{ \"sourceName\": \"description\", \"targetName\": \"desc_col\" },{ \"sourceName\": \"status\", \"targetName\": \"status_cd\" }],\"partitionBy\": [{ \"partition\": \"d\", \"value\": \"$yesterday\" }]}"
+
+
+    //    val source = Source()
+    //    source.url = "jdbc:mysql://mysqln1.dabig.com:33061"
+    //    source.driver = "com.mysql.jdbc.Driver"
+    //    source.userName = "bigdata"
+    //    source.password = "bigdata@mysql"
+    //    source.dbName = "beacon"
+
     val job = DataExtract()
     job.jobId = 55
     job.jobParam = "$yesterday={yyyyMMdd} $yesterdayiso={yyyy-MM-dd} $today=[yyyyMMdd] $todayiso=[yyyy-MM-dd]"
@@ -174,19 +123,17 @@ class EtlDataExtract extends AbstractApplication {
     job.jobComment = "ods_ceshi_chouqu1"
     job.jobCycle = "D"
     job.jobExecuteTime = "00:05"
-    job.jobContent = "{\"sourceType\": \"MYSQL\",\"sourceId\": null,\"sourceTable\": [\"da_app_page\"],\"targetType\": \"HIVE\",\"targetDb\": \"test\",\"targetTable\": \"da_app_page\",\"filter\": \"\",\"splitKey\": \"id\",\"writeMode\": 1,\"fieldMapping\" : [{ \"sourceName\": \"id\", \"targetName\": \"id\" },{ \"sourceName\": \"page\", \"targetName\": \"page\" },{ \"sourceName\": \"page_name\", \"targetName\": \"page_name\" },{ \"sourceName\": \"description\", \"targetName\": \"desc_col\" },{ \"sourceName\": \"status\", \"targetName\": \"status_cd\" }],\"partitionBy\": [{ \"partition\": \"d\", \"value\": \"$yesterday\" }]}"
+    job.jobContent = "{\"sourceType\": \"MYSQL\",\"sourceId\": 1,\"sourceTable\": [\"source\"],\"targetType\": \"HIVE\",\"targetDb\": \"test\",\"targetTable\": \"da_app_page\",\"filter\": \"\",\"splitKey\": \"create_time\",\"writeMode\": 1,\"fieldMapping\" : [{ \"sourceName\": \"id\", \"targetName\": \"id\" },{ \"sourceName\": \"page\", \"targetName\": \"page\" },{ \"sourceName\": \"page_name\", \"targetName\": \"page_name\" },{ \"sourceName\": \"description\", \"targetName\": \"desc_col\" },{ \"sourceName\": \"status\", \"targetName\": \"status_cd\" }],\"partitionBy\": [{ \"partition\": \"d\", \"value\": \"$yesterday\" }]}"
 
     val source = Source()
-    source.url = "jdbc:mysql://mysqln1.dabig.com:33061"
-    source.driver = "com.mysql.jdbc.Driver"
-    source.userName = "bigdata"
-    source.password = "bigdata@mysql"
-    source.dbName = "beacon"
+    source.url = "jdbc:mysql://localhost:3306"
+    source.driver = "com.mysql.cj.jdbc.Driver"
+    source.userName = "root"
+    source.password = "L2Bs9fD#"
+    source.dbName = "ssxadmin"
 
     (job, source)
   }
 
 }
-
-
 
