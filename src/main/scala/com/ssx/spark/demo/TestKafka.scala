@@ -24,8 +24,8 @@ import scala.collection.mutable
  **/
 class TestKafka extends AbstractApplication {
 
-  override def setConf(conf: SparkConf): Unit = {
-
+  override def setConf(conf: SparkConf, args: mutable.Map[String, String]): Unit = {
+    conf.set("spark.executor.memory", "2G")
   }
 
   override def execute(sparkSession: SparkSession, args: mutable.Map[String, String]) = {

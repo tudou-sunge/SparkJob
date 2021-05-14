@@ -352,6 +352,9 @@
     <orderEntry type="library" name="Maven: org.scala-lang:scala-reflect:2.11.4" level="project" />
     <orderEntry type="library" name="Maven: com.fasterxml.jackson.core:jackson-core:2.5.0" level="project" />
     <orderEntry type="library" name="Maven: com.thoughtworks.paranamer:paranamer:2.6" level="project" />
+    <orderEntry type="library" name="Maven: cn.hutool:hutool-db:5.5.8" level="project" />
+    <orderEntry type="library" name="Maven: cn.hutool:hutool-setting:5.5.8" level="project" />
+    <orderEntry type="library" name="Maven: cn.hutool:hutool-log:5.5.8" level="project" />
     <orderEntry type="library" name="Maven: com.fasterxml.jackson.core:jackson-databind:2.5.0" level="project" />
     <orderEntry type="library" name="Maven: org.apache.calcite:calcite-avatica:1.5.0" level="project" />
     <orderEntry type="library" name="Maven: com.fasterxml.jackson.core:jackson-annotations:2.5.0" level="project" />

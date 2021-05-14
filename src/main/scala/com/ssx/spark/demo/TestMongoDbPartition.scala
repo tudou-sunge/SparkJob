@@ -26,8 +26,7 @@ class TestMongoDbPartition extends AbstractApplication {
   val mongoUrl = "mongodb://syncdb01.dabig.me:27119/phoenix-course-listen.listenCourseRecord_"
   val tmpTable = "test.mongodb_course_listen_"
 
-  override def setConf(conf: SparkConf): Unit = {
-    //设置每个executor的内存
+  override def setConf(conf: SparkConf, args: mutable.Map[String, String]): Unit = {
     conf.set("spark.executor.memory", "2G")
   }
 

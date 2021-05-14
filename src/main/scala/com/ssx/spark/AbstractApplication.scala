@@ -3,6 +3,7 @@ package com.ssx.spark
 import java.sql.{Connection, Timestamp}
 import java.util.Properties
 
+import cn.hutool.db.ds.simple.SimpleDataSource
 import com.alibaba.fastjson.{JSONArray, JSONObject}
 import com.ssx.spark.common.Source
 import com.ssx.spark.common.DataExtract
@@ -21,7 +22,7 @@ import scala.collection.{immutable, mutable}
 trait AbstractApplication extends Logging with Serializable {
 
 
-  def setConf(conf: SparkConf)
+  def setConf(conf: SparkConf, args: mutable.Map[String, String])
 
   def execute(sparkSession: SparkSession, args: mutable.Map[String, String])
 
@@ -31,13 +32,15 @@ trait AbstractApplication extends Logging with Serializable {
    * @param args 入参
    */
   def execute(args: mutable.Map[String, String]): Unit = {
+    val jobId = args(JobConsts.JOB_ID).toLong
     var sparkSession: SparkSession = null
     val sparkConf: SparkConf = initSparkConf(args.get(JobConsts.ARGS_CLASS_NAME).getOrElse("DefalultAppName"))
     val master = args.getOrElse("_master", "yarn")
     if ("local".equalsIgnoreCase(master)) sparkConf.setMaster("local[*]")
     // 支持个性化conf设置
-    setConf(sparkConf)
+    setConf(sparkConf, args)
     sparkSession = SparkSession.builder.config(sparkConf).enableHiveSupport.getOrCreate
+    getJob(sparkSession, jobId)
     // 执行具体任务
     execute(sparkSession, args)
   }
@@ -81,14 +84,9 @@ trait AbstractApplication extends Logging with Serializable {
    * 获取数据源
    */
   protected def getSource(sparkSession: SparkSession, sourceType: String, sourceId: Long) = {
-    val result = sparkSession.read
-      .format("jdbc")
-      .option("url", MySqlProperty.URL)
-      .option("driver", MySqlProperty.DRIVER)
-      .option("user", MySqlProperty.USER)
-      .option("password", MySqlProperty.PASSWORD)
-      .option("dbtable", "source")
-      .load
+    val dataSource = new SimpleDataSource("ssxadmin")
+    val props = dataSource.getConnProps()
+    val result = sparkSession.read.jdbc(dataSource.getUrl, "source", props)
       .where("status = 1")
       .where(s"source_id = '$sourceId'")
       .collect().map { row => {
@@ -118,14 +116,9 @@ trait AbstractApplication extends Logging with Serializable {
    * 获取任务
    */
   protected def getJob(sparkSession: SparkSession, jobId: Long) = {
-    val result = sparkSession.read
-      .format("jdbc")
-      .option("url", MySqlProperty.URL)
-      .option("driver", MySqlProperty.DRIVER)
-      .option("user", MySqlProperty.USER)
-      .option("password", MySqlProperty.PASSWORD)
-      .option("dbtable", "job")
-      .load
+    val dataSource = new SimpleDataSource("ssxadmin")
+    val props = dataSource.getConnProps()
+    val result = sparkSession.read.jdbc(dataSource.getUrl, "source", props)
       .where("job_status = 0")
       .where(s"job_id = $jobId")
       .collect()

@@ -279,6 +279,13 @@
             </exclusions>
         </dependency>
 
+        <!-- DB工具类 -->
+        <dependency>
+            <groupId>cn.hutool</groupId>
+            <artifactId>hutool-db</artifactId>
+            <version>5.5.8</version>
+        </dependency>
+
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
@@ -343,15 +350,15 @@
                 <directory>src/main/resources</directory>
                 <filtering>false</filtering>
                 <excludes>
-                    <exclude>conf/dev/**</exclude>
-                    <exclude>conf/test/**</exclude>
-                    <exclude>conf/pro/**</exclude>
+                    <exclude>config/dev/**</exclude>
+                    <exclude>config/test/**</exclude>
+                    <exclude>config/pro/**</exclude>
                 </excludes>
             </resource>
             <!-- 定制开发环境配置文件替换到指定conf目录 -->
             <resource>
-                <directory>src/main/resources/conf/${profiles.active}</directory>
-                <targetPath>conf</targetPath>
+                <directory>src/main/resources/config/${profiles.active}</directory>
+                <targetPath>config</targetPath>
                 <includes>
                     <include>*.properties</include>
                 </includes>
@@ -359,7 +366,7 @@
             </resource>
             <!-- 定制开发环境配置文件替换到src/main/resources目录 -->
             <resource>
-                <directory>src/main/resources/conf/${profiles.active}</directory>
+                <directory>src/main/resources/config/${profiles.active}</directory>
                 <includes>
                     <include>core-site.xml</include>
                     <include>hdfs-site.xml</include>

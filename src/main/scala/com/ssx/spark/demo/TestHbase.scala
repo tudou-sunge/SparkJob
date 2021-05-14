@@ -21,7 +21,9 @@ class TestHbase extends AbstractApplication {
 
   case class Person(MY_PK: Long, FIRST_NAME: String,LAST_NAME:String)
 
-  override def setConf(conf: SparkConf): Unit = {}
+  override def setConf(conf: SparkConf, args: mutable.Map[String, String]): Unit = {
+    conf.set("spark.executor.memory", "2G")
+  }
 
   override def execute(sparkSession: SparkSession, args: mutable.Map[String, String]): Unit = {
 

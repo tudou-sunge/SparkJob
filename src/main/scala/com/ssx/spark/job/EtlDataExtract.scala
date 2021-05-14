@@ -23,7 +23,8 @@ import scala.collection.mutable
  **/
 
 class EtlDataExtract extends AbstractApplication {
-  override def setConf(conf: SparkConf): Unit = {
+
+  override def setConf(conf: SparkConf, args: mutable.Map[String, String]): Unit = {
     conf.set("spark.executor.memory", "2G")
   }
 
@@ -134,6 +135,5 @@ class EtlDataExtract extends AbstractApplication {
 
     (job, source)
   }
-
 }
 

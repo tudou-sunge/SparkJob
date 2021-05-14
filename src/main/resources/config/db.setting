@@ -1,0 +1,5 @@
+[ssxadmin]
+driver = com.mysql.cj.jdbc.Driver
+url = jdbc:mysql://localhost:3306/ssxadmin
+username = root
+password = L2Bs9fD#

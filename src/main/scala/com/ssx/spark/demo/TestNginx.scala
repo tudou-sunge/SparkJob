@@ -22,7 +22,10 @@ import scala.collection.mutable
  * @create 2021/05/10 10:53
  **/
 class TestNginx extends AbstractApplication{
-  override def setConf(conf: SparkConf): Unit = {}
+
+  override def setConf(conf: SparkConf, args: mutable.Map[String, String]): Unit = {
+    conf.set("spark.executor.memory", "2G")
+  }
 
   override def execute(sparkSession: SparkSession, args: mutable.Map[String, String]): Unit = {
     val targetDay = args.get(JobConsts.RUN_DAY).get

@@ -17,7 +17,8 @@ import scala.collection.mutable
  * @version 1.0
  */
 class EtlSparkSQL extends AbstractApplication{
-  override def setConf(conf: SparkConf): Unit = {
+
+  override def setConf(conf: SparkConf, args: mutable.Map[String, String]): Unit = {
     conf.set("spark.executor.memory", "4G")
   }
 
