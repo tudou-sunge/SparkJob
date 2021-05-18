@@ -4,8 +4,8 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.dongao</groupId>
-    <artifactId>mljob</artifactId>
+    <groupId>com.ssx</groupId>
+    <artifactId>sparkjob</artifactId>
     <version>1.0</version>
     <properties>
         <maven.compiler.source>1.8</maven.compiler.source>
@@ -61,11 +61,19 @@
             <artifactId>mongo-spark-connector_2.11</artifactId>
             <version>2.4.1</version>
         </dependency>
+
+<!--        <dependency>-->
+<!--            <groupId>cn.hutool</groupId>-->
+<!--            &lt;!&ndash; <artifactId>hutool-all</artifactId>&ndash;&gt;-->
+<!--            <artifactId>hutool-core</artifactId>-->
+<!--            <version>5.5.8</version>-->
+<!--        </dependency>-->
+
+        <!-- DB工具类 -->
         <dependency>
             <groupId>cn.hutool</groupId>
-            <!-- <artifactId>hutool-all</artifactId>-->
-            <artifactId>hutool-core</artifactId>
-            <version>4.0.12</version>
+            <artifactId>hutool-db</artifactId>
+            <version>5.5.8</version>
         </dependency>
 
         <dependency>
@@ -255,13 +263,6 @@
         </dependency>
 
         <dependency>
-            <groupId>cn.hutool</groupId>
-            <artifactId>hutool-all</artifactId>
-            <version>4.0.12</version>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
             <groupId>org.elasticsearch</groupId>
             <artifactId>elasticsearch-spark-20_2.11</artifactId>
             <version>6.0.0</version>
@@ -279,12 +280,7 @@
             </exclusions>
         </dependency>
 
-        <!-- DB工具类 -->
-        <dependency>
-            <groupId>cn.hutool</groupId>
-            <artifactId>hutool-db</artifactId>
-            <version>5.5.8</version>
-        </dependency>
+
 
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
@@ -342,7 +338,7 @@
     </dependencies>
 
     <build>
-        <finalName>mljob</finalName>
+        <finalName>spark-job</finalName>
         <sourceDirectory>src/main/scala</sourceDirectory>
         <resources>
             <!-- 排除目录 -->
@@ -404,7 +400,7 @@
             <!--                    </descriptorRefs>-->
             <!--                    <archive>-->
             <!--                        <manifest>-->
-            <!--                            <mainClass>com.dongao.spark.SparkEntry</mainClass>-->
+            <!--                            <mainClass>com.ssx.spark.SparkEntry</mainClass>-->
             <!--                        </manifest>-->
             <!--                    </archive>-->
             <!--                </configuration>-->
@@ -499,36 +495,9 @@
                 <enabled>true</enabled>
             </releases>
         </repository>
-        <repository>
-            <id>dabigdata-repo</id>
-            <name>dabigdata nexus repository</name>
-            <url>http://nexus.dabig.me/repository/maven-public/</url>
-            <releases>
-                <enabled>true</enabled>
-            </releases>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
-        </repository>
-        <repository>
-            <id>mvn-repo</id>
-            <url>http://maven.ansj.org/</url>
-        </repository>
     </repositories>
 
     <pluginRepositories>
-        <pluginRepository>
-            <id>dabigdata-repo</id>
-            <name>dabigdata nexus repository</name>
-            <url>http://nexus.dabig.me/repository/maven-public/</url>
-            <releases>
-                <enabled>true</enabled>
-            </releases>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
-        </pluginRepository>
-
         <pluginRepository>
             <id>public</id>
             <name>aliyun nexus</name>
