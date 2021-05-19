@@ -2,7 +2,7 @@ package com.ssx.spark
 import java.sql.Timestamp
 package object common {
 
-  case class DataExtract(var jobId: Long = 0L,
+  case class Job(var jobId: Long = 0L,
                          var jobName: String = "",
                          var jobType: String = "",
                          var jobComment: String = "",

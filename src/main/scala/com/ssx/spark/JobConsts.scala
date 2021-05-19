@@ -21,7 +21,10 @@ object JobConsts {
    * 调用方传入的任务ID
    */
   val JOB_ID = "jobId"
-
+  /**
+   * 后端项目名
+   */
+  val PROJECT_NAME = "ssxadmin"
 
 
 }

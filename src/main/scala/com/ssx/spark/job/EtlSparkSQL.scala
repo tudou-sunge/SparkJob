@@ -5,7 +5,7 @@ import com.ssx.spark.AbstractApplication
 import com.ssx.spark.utils.ParseJobParam
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
-import com.ssx.spark.common.{DataExtract, Source}
+import com.ssx.spark.common.{Job, Source}
 
 import scala.collection.mutable
 
@@ -30,7 +30,7 @@ class EtlSparkSQL extends AbstractApplication{
     logInfo(s"JobId: $jobId  runDay:$runDay  seq:$seq  Job Begin Running!!!!")
     val jobParam = ParseJobParam.parseJobParam(job.jobParam, runDay, seq)
     val jobContent = JSON.parseObject(job.jobContent)
-    val sqlList = jobContent.getJSONArray("sqlList")
+    val sqlList = jobContent.getJSONArray(JobKey.SQL_LIST)
     sqlList.toArray().map(_.toString).foreach(item => {
       val sql = ParseJobParam.replaceJobParam(jobParam, item)
       logInfo(sql)
@@ -40,7 +40,7 @@ class EtlSparkSQL extends AbstractApplication{
 
   // 测试方法
   def createTestData() = {
-    val job = DataExtract()
+    val job = Job()
     job.jobId = 55
     job.jobName = "dwd_test_sql"
     job.jobType = "DataExtract"

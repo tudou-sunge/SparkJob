@@ -33,7 +33,7 @@ object ParseJobParam {
    */
   def parseBusinessTime(format: String, runDay: String, seq: Int): String = {
     var result = ""
-    val runDate = new DateTime(runDay).plusHours(seq - 1 )
+    val runDate = new DateTime(runDay).plusHours(seq - 1)
     if (format.contains("{")) {
       result = runDate.toString(format.replace("{", "").replace("}", ""))
     }
@@ -64,5 +64,7 @@ object ParseJobParam {
     val jobParam = parseJobParam(val1, val2, 2)
     val str = replaceJobParam(jobParam, "create_time>='$yesterdayiso' AND create_time < '$todayiso'")
     println(str)
+    val str1 = new DateTime(val2).plusHours(0 - 1 ).toString("yyyy-MM-dd")
+    println(str1)
   }
 }

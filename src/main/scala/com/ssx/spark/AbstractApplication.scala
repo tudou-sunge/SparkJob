@@ -5,10 +5,9 @@ import java.util.Properties
 
 import cn.hutool.db.ds.simple.SimpleDataSource
 import com.alibaba.fastjson.{JSONArray, JSONObject}
-import com.ssx.spark.common.Source
-import com.ssx.spark.common.DataExtract
+import com.ssx.spark.common.{Job, Source}
 import com.ssx.spark.job.PartitionBy
-import com.ssx.spark.utils.MySqlProperty
+import com.ssx.spark.logs.LogRecord
 import org.apache.phoenix.jdbc.PhoenixDriver
 import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
@@ -17,7 +16,7 @@ import org.apache.spark.sql.catalyst.catalog.SessionCatalog
 import org.apache.spark.sql.types.{DataType, IntegerType, LongType, StringType, TimestampType}
 import org.apache.spark.sql.{DataFrame, DataFrameWriter, Dataset, Row, SaveMode, SparkSession}
 
-import scala.collection.{immutable, mutable}
+import scala.collection.{mutable}
 
 trait AbstractApplication extends Logging with Serializable {
 
@@ -32,7 +31,6 @@ trait AbstractApplication extends Logging with Serializable {
    * @param args 入参
    */
   def execute(args: mutable.Map[String, String]): Unit = {
-    val jobId = args(JobConsts.JOB_ID).toLong
     var sparkSession: SparkSession = null
     val sparkConf: SparkConf = initSparkConf(args.get(JobConsts.ARGS_CLASS_NAME).getOrElse("DefalultAppName"))
     val master = args.getOrElse("_master", "yarn")
@@ -40,7 +38,10 @@ trait AbstractApplication extends Logging with Serializable {
     // 支持个性化conf设置
     setConf(sparkConf, args)
     sparkSession = SparkSession.builder.config(sparkConf).enableHiveSupport.getOrCreate
-    getJob(sparkSession, jobId)
+    // 本地执行不记录日志
+    if (!"local".equalsIgnoreCase(master)) {
+      // LogRecord.recordLog(sparkSession,args)
+    }
     // 执行具体任务
     execute(sparkSession, args)
   }
@@ -51,7 +52,7 @@ trait AbstractApplication extends Logging with Serializable {
    * @param appName 应用名称
    * @return
    */
-  def initSparkConf(appName: String): SparkConf = {
+  private def initSparkConf(appName: String): SparkConf = {
     new SparkConf().setAppName(appName)
       .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       // 压缩
@@ -71,7 +72,7 @@ trait AbstractApplication extends Logging with Serializable {
       //每个 Map 最大分割大小
       .set("hive.merge.size.per.task", "256000000")
       // 平均文件大小，是决定是否执行合并操作的阈值，默认16000000
-      .set("mapred.max.split.size", "256000000")
+      .set("mapreduce.input.fileinputformat.split.maxsize", "256000000")
       // 执行 Map 前进行小文件合并
       .set("hive.merge.smallfiles.avgsize", "256000000")
       // 大小写不敏感
@@ -86,9 +87,9 @@ trait AbstractApplication extends Logging with Serializable {
   protected def getSource(sparkSession: SparkSession, sourceType: String, sourceId: Long) = {
     val dataSource = new SimpleDataSource("ssxadmin")
     val props = dataSource.getConnProps()
-    val result = sparkSession.read.jdbc(dataSource.getUrl, "source", props)
+    val result = sparkSession.read.jdbc(dataSource.getUrl, "source",  props)
       .where("status = 1")
-      .where(s"source_id = '$sourceId'")
+      .where(s"source_id = $sourceId")
       .collect().map { row => {
       val tmp = Source()
       tmp.sourceId = row.getAs[Long]("source_id")
@@ -108,22 +109,24 @@ trait AbstractApplication extends Logging with Serializable {
       tmp
     }
     }
-
+    if (result.isEmpty) {
+      throw new RuntimeException("No Source Enable !!!")
+    }
     result(0)
   }
 
   /**
    * 获取任务
    */
-  protected def getJob(sparkSession: SparkSession, jobId: Long) = {
+  protected def getJob(sparkSession: SparkSession, jobId: Long): Job = {
     val dataSource = new SimpleDataSource("ssxadmin")
     val props = dataSource.getConnProps()
-    val result = sparkSession.read.jdbc(dataSource.getUrl, "source", props)
+    val result = sparkSession.read.jdbc(dataSource.getUrl, "job", props)
       .where("job_status = 0")
       .where(s"job_id = $jobId")
       .collect()
       .map { row => {
-        val tmp = DataExtract()
+        val tmp = Job()
         tmp.jobId = row.getAs[Long]("job_id")
         tmp.jobName = row.getAs[String]("job_name")
         tmp.jobType = row.getAs[String]("job_type")
@@ -145,7 +148,9 @@ trait AbstractApplication extends Logging with Serializable {
         tmp
       }
       }
-
+    if (result.isEmpty) {
+      throw new RuntimeException("No Job Enable !!!")
+    }
     result(0)
   }
 
@@ -153,10 +158,10 @@ trait AbstractApplication extends Logging with Serializable {
    * 获取Phoenix链接
    */
 
-  protected def getPhoenixConnect(url: String): Connection={
+  protected def getPhoenixConnect(url: String): Connection = {
     val driver = new PhoenixDriver()
     val properties = new Properties()
-    val connect = driver.connect(url ,properties)
+    val connect = driver.connect(url, properties)
     connect.setAutoCommit(false)
     connect.setReadOnly(false)
     connect
@@ -200,8 +205,8 @@ trait AbstractApplication extends Logging with Serializable {
         .agg(splitKey -> "min", splitKey -> "max")
         .collect()
         .foreach(x => {
-          lowerBound = x.getTimestamp(0).toString.substring(0,19)
-          upperBound = x.getTimestamp(1).toString.substring(0,19)
+          lowerBound = x.getTimestamp(0).toString.substring(0, 19)
+          upperBound = x.getTimestamp(1).toString.substring(0, 19)
         })
       numPartitions = 32L
     }
@@ -284,13 +289,6 @@ trait AbstractApplication extends Logging with Serializable {
     // 重写模式下，采用清空表的方式 ，注意，必须有drop的权限才可以，否则会一直报错没权限
     if (tmpMode eq SaveMode.Overwrite) dfWrite.option("truncate", true).save()
     else dfWrite.save()
-  }
-
-  /**
-   * 对DF进行转译
-   */
-  def transformDataFrame(df: DataFrame, sparkSession: SparkSession, fieldMapping: JSONArray, partitionBy: JSONArray, jobParam: mutable.HashMap[String, String]):DataFrameWriter[Row]= {
-    null
   }
 
 }

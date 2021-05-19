@@ -4,7 +4,7 @@ package com.ssx.spark.job
 import com.ssx.spark.utils.ParseJobParam
 import com.ssx.spark.{AbstractApplication, JobConsts}
 import com.alibaba.fastjson.{JSON, JSONArray, JSONObject}
-import com.ssx.spark.common.{DataExtract, Source}
+import com.ssx.spark.common.{Job, Source}
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.SessionCatalog
@@ -24,6 +24,11 @@ import scala.collection.mutable
 
 class EtlDataExtract extends AbstractApplication {
 
+  var sourceType: String = _
+  var sourceId: Long = _
+  var targetDb: String = _
+  var targetTable: String = _
+
   override def setConf(conf: SparkConf, args: mutable.Map[String, String]): Unit = {
     conf.set("spark.executor.memory", "2G")
   }
@@ -36,19 +41,19 @@ class EtlDataExtract extends AbstractApplication {
     val job = getJob(sparkSession, jobId)
     val jobParam = ParseJobParam.parseJobParam(job.jobParam, runDay, seq)
     val jobContent = JSON.parseObject(job.jobContent)
-    val sourceType = jobContent.getObject("sourceType", classOf[String])
-    val sourceId = jobContent.getObject("sourceId", classOf[Long])
-    val targetDb = jobContent.getObject("targetDb", classOf[String])
-    val targetTable = jobContent.getObject("targetTable", classOf[String])
-    val filter = jobContent.getObject("filter", classOf[String])
+    sourceType = jobContent.getObject(JobKey.SOURCE_TYPE, classOf[String])
+    sourceId = jobContent.getObject(JobKey.SOURCE_ID, classOf[Long])
+    targetDb = jobContent.getObject(JobKey.TARGET_DB, classOf[String])
+    targetTable = jobContent.getObject(JobKey.TARGET_TABLE, classOf[String])
+    val filter = jobContent.getObject(JobKey.FILTER, classOf[String])
     val filterStr = ParseJobParam.replaceJobParam(jobParam, filter)
-    val splitKey = jobContent.getObject("splitKey", classOf[String])
-    val fieldMapping = jobContent.getJSONArray("fieldMapping")
-    val partitionBy = jobContent.getJSONArray("partitionBy")
+    val splitKey = jobContent.getObject(JobKey.SPLIT_KEY, classOf[String])
+    val fieldMapping = jobContent.getJSONArray(JobKey.FIELD_MAPPING)
+    val partitionBy = jobContent.getJSONArray(JobKey.PARTITION_BY)
     val source = getSource(sparkSession, sourceType, sourceId)
-    val sourceTable = jobContent.getJSONArray("sourceTable")
+    val sourceTable = jobContent.getJSONArray(JobKey.SOURCE_TABLE)
     // 如果是覆盖则先删除分区内容
-    if (jobContent.getObject("writeMode", classOf[String]) == "1") {
+    if (jobContent.getObject(JobKey.WRITE_MODE, classOf[String]) == "1") {
       delPartition(sparkSession, targetTable, partitionBy, jobParam, targetDb)
     }
 
@@ -67,7 +72,7 @@ class EtlDataExtract extends AbstractApplication {
   /**
    * 对DF进行转译
    */
-  override def transformDataFrame(df: DataFrame, sparkSession: SparkSession, fieldMapping: JSONArray, partitionBy: JSONArray, jobParam: mutable.HashMap[String, String]) = {
+  def transformDataFrame(df: DataFrame, sparkSession: SparkSession, fieldMapping: JSONArray, partitionBy: JSONArray, jobParam: mutable.HashMap[String, String]) = {
     var tmpDf = df
     // 要查询的字段
     var columnSeq = Seq.empty[String]
@@ -80,7 +85,6 @@ class EtlDataExtract extends AbstractApplication {
       columnSeq = columnSeq :+ target
       tmpDf = tmpDf.withColumnRenamed(source, target)
     })
-
     // 增加分区字段及值
     partitionBy.toArray.map(_.asInstanceOf[JSONObject]).foreach(t => {
       val partition = t.getObject(PartitionBy.PARTITION, classOf[String])
@@ -98,7 +102,7 @@ class EtlDataExtract extends AbstractApplication {
 
   // 测试方法
   def createTestData() = {
-    //    val job = DataExtract()
+    //    val job = Job()
     //    job.jobId = 55
     //    job.jobParam = "$yesterday={yyyyMMdd} $yesterdayiso={yyyy-MM-dd} $today=[yyyyMMdd] $todayiso=[yyyy-MM-dd]"
     //    job.jobName = "ods_ceshi_chouqu1"
@@ -116,7 +120,7 @@ class EtlDataExtract extends AbstractApplication {
     //    source.password = "bigdata@mysql"
     //    source.dbName = "beacon"
 
-    val job = DataExtract()
+    val job = Job()
     job.jobId = 55
     job.jobParam = "$yesterday={yyyyMMdd} $yesterdayiso={yyyy-MM-dd} $today=[yyyyMMdd] $todayiso=[yyyy-MM-dd]"
     job.jobName = "ods_ceshi_chouqu1"
