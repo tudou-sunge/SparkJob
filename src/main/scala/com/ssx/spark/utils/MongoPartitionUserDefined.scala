@@ -14,7 +14,7 @@ import org.bson.types.ObjectId
  * @createTime 2021/5/11 6:32 下午
  * @version 1.0
  */
-class MongoPartitionUserDefined extends MongoPaginateByCountPartitioner {
+private[utils] class MongoPartitionUserDefined extends MongoPaginateByCountPartitioner {
   private implicit object BsonValueOrdering extends BsonValueOrdering
   private val DefaultPartitionKey = "_id"
   private val DefaultNumberOfPartitions = "64"
