@@ -13,12 +13,12 @@ import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.SessionCatalog
-import org.apache.spark.sql.types.{DataType, IntegerType, LongType, StringType, TimestampType}
-import org.apache.spark.sql.{DataFrame, DataFrameWriter, Dataset, Row, SaveMode, SparkSession}
+import org.apache.spark.sql.types.{DataType, IntegerType, LongType, TimestampType}
+import org.apache.spark.sql.{DataFrame, Dataset, Row, SaveMode, SparkSession}
 
 import scala.collection.{mutable}
 
-trait AbstractApplication extends Logging with Serializable {
+abstract class AbstractApplication extends Logging with Serializable {
 
 
   def setConf(conf: SparkConf, args: mutable.Map[String, String])
@@ -40,7 +40,7 @@ trait AbstractApplication extends Logging with Serializable {
     sparkSession = SparkSession.builder.config(sparkConf).enableHiveSupport.getOrCreate
     // 本地执行不记录日志
     if (!"local".equalsIgnoreCase(master)) {
-      // LogRecord.recordLog(sparkSession,args)
+      LogRecord.recordLog(sparkSession,args)
     }
     // 执行具体任务
     execute(sparkSession, args)

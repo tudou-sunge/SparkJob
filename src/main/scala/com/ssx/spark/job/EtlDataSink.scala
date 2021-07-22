@@ -39,9 +39,9 @@ class EtlDataSink extends AbstractApplication {
     val seq = args(JobConsts.SEQ).toInt
     val jobId = args(JobConsts.JOB_ID).toLong
     logInfo(s"JobId: $jobId  runDay:$runDay  seq:$seq  Job Begin Running!!!!")
-    val (job, source) = createTestData()
+    // val (job, source) = createTestData()
 
-    // val job = getJob(sparkSession, jobId)
+    val job = getJob(sparkSession, jobId)
     val jobParam = ParseJobParam.parseJobParam(job.jobParam, runDay, seq)
     val jobContent = JSON.parseObject(job.jobContent)
     sourceDb = jobContent.getObject(JobKey.SOURCE_DB, classOf[String])
@@ -53,7 +53,7 @@ class EtlDataSink extends AbstractApplication {
     val afterExecuteSQL = ParseJobParam.replaceJobParam(jobParam, jobContent.getObject(JobKey.AFTER_EXECUTE_SQL, classOf[String]))
     val fieldMapping = jobContent.getJSONArray(JobKey.FIELD_MAPPING)
     val partitionBy = jobContent.getJSONArray(JobKey.PARTITION_BY)
-    // val source = getSource(sparkSession, targetType, targetId)
+    val source = getSource(sparkSession, targetType, targetId)
 
     // 如果不为空则执行
     if (StringUtils.isNotBlank(beforeExecuteSQL)) {
@@ -62,7 +62,7 @@ class EtlDataSink extends AbstractApplication {
 
     val df = sparkSession.table(sourceDb + "." + sourceTable)
     val dfWrite = transformDataFrame(df, sparkSession, fieldMapping, partitionBy, jobParam)
-    // save(dfWrite, source, targetTable)
+    save(dfWrite, source, targetTable)
 
     // 如果不为空则执行
     if (StringUtils.isNotBlank(afterExecuteSQL)) {
@@ -111,8 +111,6 @@ class EtlDataSink extends AbstractApplication {
 
     tmpDf.selectExpr(columnSeq: _*)
       .where(if(isPartitionTable) filterStr else "1=1")
-      .show(1000, false)
-
   }
 
   /**
