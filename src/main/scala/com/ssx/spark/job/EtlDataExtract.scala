@@ -6,8 +6,6 @@ import com.ssx.spark.{AbstractApplication, JobConsts}
 import com.alibaba.fastjson.{JSON, JSONArray, JSONObject}
 import com.ssx.spark.common.{Job, Source}
 import org.apache.spark.SparkConf
-import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.catalog.SessionCatalog
 import org.apache.spark.sql._
 
 import scala.collection.mutable
@@ -80,15 +78,15 @@ class EtlDataExtract extends AbstractApplication {
     var partitionSeq = Seq.empty[String]
     // 修改字段映射名称
     fieldMapping.toArray.map(_.asInstanceOf[JSONObject]).foreach(t => {
-      val source = t.getObject(FieldMapping.SOURCE_NAME, classOf[String])
-      val target = t.getObject(FieldMapping.TARGET_NAME, classOf[String])
+      val source = t.getString(FieldMapping.SOURCE_NAME)
+      val target = t.getString(FieldMapping.TARGET_NAME)
       columnSeq = columnSeq :+ target
       tmpDf = tmpDf.withColumnRenamed(source, target)
     })
     // 增加分区字段及值
     partitionBy.toArray.map(_.asInstanceOf[JSONObject]).foreach(t => {
-      val partition = t.getObject(PartitionBy.PARTITION, classOf[String])
-      val value = t.getObject(PartitionBy.VALUE, classOf[String])
+      val partition = t.getString(PartitionBy.PARTITION)
+      val value = t.getString(PartitionBy.VALUE)
       columnSeq = columnSeq :+ partition
       partitionSeq = partitionSeq :+ partition
       tmpDf = tmpDf.withColumn(partition, functions.lit(ParseJobParam.replaceJobParam(jobParam, value)))

@@ -8,6 +8,7 @@ import com.alibaba.fastjson.{JSONArray, JSONObject}
 import com.ssx.spark.common.{Job, Source}
 import com.ssx.spark.job.PartitionBy
 import com.ssx.spark.logs.LogRecord
+import org.apache.commons.lang3.StringUtils
 import org.apache.phoenix.jdbc.PhoenixDriver
 import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
@@ -16,7 +17,7 @@ import org.apache.spark.sql.catalyst.catalog.SessionCatalog
 import org.apache.spark.sql.types.{DataType, IntegerType, LongType, TimestampType}
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SaveMode, SparkSession}
 
-import scala.collection.{mutable}
+import scala.collection.mutable
 
 abstract class AbstractApplication extends Logging with Serializable {
 
@@ -40,7 +41,7 @@ abstract class AbstractApplication extends Logging with Serializable {
     sparkSession = SparkSession.builder.config(sparkConf).enableHiveSupport.getOrCreate
     // 本地执行不记录日志
     if (!"local".equalsIgnoreCase(master)) {
-      LogRecord.recordLog(sparkSession,args)
+      LogRecord.recordLog(sparkSession, args)
     }
     // 执行具体任务
     execute(sparkSession, args)
@@ -87,7 +88,7 @@ abstract class AbstractApplication extends Logging with Serializable {
   protected def getSource(sparkSession: SparkSession, sourceType: String, sourceId: Long) = {
     val dataSource = new SimpleDataSource("ssxadmin")
     val props = dataSource.getConnProps()
-    val result = sparkSession.read.jdbc(dataSource.getUrl, "source",  props)
+    val result = sparkSession.read.jdbc(dataSource.getUrl, "source", props)
       .where("status = 1")
       .where(s"source_id = $sourceId")
       .collect().map { row => {
@@ -170,15 +171,20 @@ abstract class AbstractApplication extends Logging with Serializable {
   /**
    * 单Executor读取
    */
-  protected def getDataFrame(sparkSession: SparkSession, source: Source, tableName: String): DataFrame = {
-    sparkSession.read
-      .format("jdbc")
-      .option("url", source.url + "/" + source.dbName)
-      .option("driver", source.driver)
-      .option("user", source.userName)
-      .option("password", source.password)
-      .option("dbtable", tableName)
-      .load
+  protected def getDataFrame(sparkSession: SparkSession, source: Source, tableName: String, filter: String = ""): DataFrame = {
+    if (StringUtils.isEmpty(tableName)) {
+      throw new Exception("tableName not be null")
+    }
+    val properties = new Properties();
+    properties.put("driver", source.driver)
+    properties.put("user", source.userName)
+    properties.put("password", source.password)
+    properties.put("fetchsize", 1000)
+    if (StringUtils.isEmpty(filter)) {
+      sparkSession.read.jdbc(source.url, tableName, properties)
+    } else {
+      sparkSession.read.jdbc(source.url, tableName, Array(filter), properties)
+    }
   }
 
   /**
@@ -189,25 +195,20 @@ abstract class AbstractApplication extends Logging with Serializable {
     var upperBound = ""
     var numPartitions = 0L
     if (dataType == classOf[LongType] || dataType == classOf[IntegerType]) {
-      getDataFrame(sparkSession, source, tableName)
-        .where(if (filter.trim.isEmpty) "1=1" else filter)
+      val row = getDataFrame(sparkSession, source, tableName, filter)
         .agg(splitKey -> "min", splitKey -> "max")
-        .collect()
-        .foreach(x => {
-          lowerBound = x.get(0).toString
-          upperBound = x.get(1).toString
-          numPartitions = (x.get(1).toString.toLong - x.get(0).toString.toLong) / 300000L + 1
-        })
+        .first()
+      lowerBound = row.get(0).toString
+      upperBound = row.get(1).toString
+      numPartitions = (upperBound.toLong - lowerBound.toLong) / 300000L + 1
     }
     if (dataType == classOf[TimestampType]) {
-      getDataFrame(sparkSession, source, tableName)
+      val row = getDataFrame(sparkSession, source, tableName, filter)
         .where(if (filter.trim.isEmpty) "1=1" else filter)
         .agg(splitKey -> "min", splitKey -> "max")
-        .collect()
-        .foreach(x => {
-          lowerBound = x.getTimestamp(0).toString.substring(0, 19)
-          upperBound = x.getTimestamp(1).toString.substring(0, 19)
-        })
+        .first()
+      lowerBound = row.getTimestamp(0).toString.substring(0, 19)
+      upperBound = row.getTimestamp(1).toString.substring(0, 19)
       numPartitions = 32L
     }
     if (lowerBound == "" || upperBound == "") throw new Exception("source table is Empty")
@@ -253,7 +254,7 @@ abstract class AbstractApplication extends Logging with Serializable {
    * 返回splitKey类型
    */
   protected def getSplitKeyType(sparkSession: SparkSession, splitKey: String, source: Source, tableName: String) = {
-    val structType = getDataFrame(sparkSession, source, tableName).select(splitKey).limit(1).schema
+    val structType = getDataFrame(sparkSession, source, tableName).select(splitKey).limit(1).first().schema
     val structFieldArray = structType.fields
     val structField = structFieldArray(0)
     val dataType: DataType = structField.dataType
